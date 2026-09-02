@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'console-detect'
+      - '**console-detect**'
 
 permissions:
   contents: write
@@ -17,46 +17,51 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Patch String in console-detect Binary
+      - name: Locate and Patch String in console-detect
         run: |
           python3 - << 'EOF'
-          import os
+          import os, sys
 
-          input_file = "console-detect"
-          output_file = "console-detect"
+          target_filename = "console-detect"
+          found_path = None
 
-          # Length check: Both sequences must equal 24 bytes exactly
+          # Search entire repo for the file
+          for root, dirs, files in os.walk("."):
+              if target_filename in files:
+                  found_path = os.path.join(root, target_filename)
+                  break
+
+          if not found_path:
+              print(f"[!] ERROR: '{target_filename}' was not found anywhere in the repo!")
+              print("Files currently in repo root:", os.listdir("."))
+              sys.exit(1)
+
+          print(f"[+] Found binary at: {found_path}")
+
           OLD_BYTES = b"rk3326-r36tmax-linux.dtb"        # 24 bytes
-          NEW_BYTES = b"rk3326-m9pro-linux.dtb\x00\x00"  # 22 bytes + 2 null bytes = 24 bytes
+          NEW_BYTES = b"rk3326-m9pro-linux.dtb\x00\x00"  # 22 bytes + 2 nulls = 24 bytes
 
-          if not os.path.exists(input_file):
-              print(f"[!] ERROR: {input_file} not found in repo root!")
-              exit(1)
-
-          with open(input_file, "rb") as f:
+          with open(found_path, "rb") as f:
               data = f.read()
 
           if OLD_BYTES not in data:
-              print("[!] Target string 'rk3326-r36tmax-linux.dtb' not found inside binary.")
-              exit(1)
+              print(f"[!] Target string 'rk3326-r36tmax-linux.dtb' not found inside {found_path}.")
+              sys.exit(1)
 
           count = data.count(OLD_BYTES)
           patched_data = data.replace(OLD_BYTES, NEW_BYTES)
 
-          with open(output_file, "wb") as f:
+          with open(found_path, "wb") as f:
               f.write(patched_data)
 
-          print(f"[+] Successfully replaced {count} occurrence(s) of string in binary.")
+          print(f"[+] Successfully replaced {count} occurrence(s) in {found_path}.")
           EOF
-
-      - name: Ensure Executable Permissions
-        run: chmod +x console-detect
 
       - name: Upload Patched Binary Artifact
         uses: actions/upload-artifact@v4
         with:
           name: console-detect-m9pro
-          path: console-detect
+          path: "**/console-detect"
           retention-days: 14
 
       - name: Commit and Push Patched Binary
@@ -65,6 +70,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add console-detect
+          git add .
           git diff --quiet && git diff --staged --quiet || git commit -m "fix(binary): patch console-detect string to support m9pro dtb"
           git push origin main || git push origin master
