@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - '**console-detect**'
+      - '**console_detect**'
 
 permissions:
   contents: write
@@ -22,7 +22,7 @@ jobs:
           python3 - << 'EOF'
           import os, sys
 
-          target_filename = "console-detect"
+          target_filename = "console_detect"
           found_path = None
 
           # Search entire repo for the file
@@ -61,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: console-detect-m9pro
-          path: "**/console-detect"
+          path: "**/console_detect"
           retention-days: 14
 
       - name: Commit and Push Patched Binary
